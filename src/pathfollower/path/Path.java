@@ -3,6 +3,7 @@ package pathfollower.path;
 import pathfollower.math.geometry.Pose2d;
 import pathfollower.math.geometry.Rotation2d;
 import pathfollower.math.geometry.Translation2d;
+import pathfollower.path.util.Waypoint;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -10,21 +11,21 @@ import java.util.List;
 import java.util.function.Function;
 
 public abstract class Path {
-    private final double dx;
+    protected final double dx;
 
-    protected final List<Translation2d> waypoints;
+    protected final List<Waypoint> waypoints;
     protected final double differentBetweenTs;
 
     protected final Constants constants;
 
-    public Path(Constants constants, double dx, List<Translation2d> waypoints) {
+    public Path(Constants constants, double dx, List<Waypoint> waypoints) {
         this.constants = constants;
         this.dx = dx;
         this.waypoints = waypoints;
         this.differentBetweenTs = 0.01 / waypoints.size();
     }
 
-    public Path(Constants constants, double dx, Translation2d... waypoints) {
+    public Path(Constants constants, double dx, Waypoint... waypoints) {
         this(constants, dx, new ArrayList<>(Arrays.asList(waypoints)));
     }
 
@@ -46,7 +47,15 @@ public abstract class Path {
         return new State(output, minT);
     }
 
-    public abstract Pose2d getVelocity(State state, Pose2d robot, double velocity, double omega);
+    public Pose2d getVelocity(State state, Pose2d robot, double velocity, double omega) {
+        Translation2d vector = new Translation2d(1 - constants.errorCorrectorPower(), this.getAngle(state.t()))
+                .plus(state.pose().getTranslation().minus(robot.getTranslation()).times(constants.errorCorrectorPower()));
+
+        double curvature = 1 / Math.abs(this.getCurvatureRadius(state.t()));
+        velocity = Math.min(constants.maxVel() - Math.min(curvature, 3.5), velocity);
+
+        return new Pose2d(new Translation2d(velocity, vector.getAngle()), Rotation2d.fromDegrees(omega));
+    }
 
     public abstract double getX(double t);
 
@@ -118,16 +127,20 @@ public abstract class Path {
         return this.waypoints.get(0);
     }
 
-    public List<Translation2d> getWaypoints() {
-        return waypoints;
+    public List<Waypoint> getWaypoints() {
+        return this.waypoints;
     }
 
-    public void setWaypoint(int index, Translation2d waypoint) {
+    public Waypoint getWaypoint(int index) {
+        return this.waypoints.get(index);
+    }
+
+    public void setWaypoint(int index, Waypoint waypoint) {
         this.waypoints.set(index, waypoint);
     }
 
     public double getDifferentBetweenTs() {
-        return differentBetweenTs;
+        return this.differentBetweenTs;
     }
 
     public double getPathLength() {
@@ -135,7 +148,7 @@ public abstract class Path {
     }
 
     public Constants getConstants() {
-        return constants;
+        return this.constants;
     }
 
     public record State(Pose2d pose, double t) {}

@@ -1,5 +1,6 @@
 package pathfollower.path;
 
+import pathfollower.path.path.BezierCurve;
 import pathfollower.path.pid.PIDPreset;
 import pathfollower.path.pid.ProfiledPIDController;
 import pathfollower.path.pid.TrapezoidProfile;
@@ -87,7 +88,7 @@ public class Follower {
 
     private BezierCurve.State getClosestState() {
         List<BezierCurve.State> points = new ArrayList<>();
-        for (double t = 0; t <= 1; t = getNextT(t, this.path.getDifferentBetweenTs())) {
+        for (double t = 0; t < 1; t = getNextT(t, this.path.getDifferentBetweenTs())) {
             if (this.state.t() < 0 || Math.abs(this.state.t() - t) <= 0.3)
                 points.add(new BezierCurve.State(this.path.getPosition(t), t));
         }
