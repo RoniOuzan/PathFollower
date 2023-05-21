@@ -12,7 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 
 public class Follower {
-    private final BezierCurve bezierCurve;
+    private final Path path;
     private final Robot robot;
 
     private final Constants constants;
@@ -20,14 +20,14 @@ public class Follower {
     private final ProfiledPIDController pidController;
     private final ProfiledPIDController omegaController;
 
-    private BezierCurve.State state = new BezierCurve.State(new Pose2d(), -1);
+    private Path.State state = new Path.State(new Pose2d(), -1);
 
     private boolean isRunning = true;
 
     private long lastUpdate = 0;
 
-    public Follower(BezierCurve bezierCurve, Robot robot, Constants constants) {
-        this.bezierCurve = bezierCurve;
+    public Follower(Path path, Robot robot, Constants constants) {
+        this.path = path;
         this.robot = robot;
 
         this.constants = constants;
@@ -41,7 +41,7 @@ public class Follower {
 
     public void start() {
         this.pidController.reset(
-                this.bezierCurve.getDistance(0, this.bezierCurve.getClosestPoint(this.robot.getPosition()).t()),
+                this.path.getDistance(0, this.path.getClosestPoint(this.robot.getPosition()).t()),
                 0);
         this.omegaController.reset(this.robot.getPosition().getRotation().getDegrees(), 0);
     }
@@ -50,15 +50,15 @@ public class Follower {
         this.state = this.getClosestState();
 
         if (this.isRunning) {
-            Pose2d velocity = this.bezierCurve.getVelocity(state, this.robot.getPosition(), this.calculateVelocity(), this.calculateOmega());
+            Pose2d velocity = this.path.getVelocity(state, this.robot.getPosition(), this.calculateVelocity(), this.calculateOmega());
 
             double lastUpdate = (System.currentTimeMillis() - this.lastUpdate) / 1000d;
             double velocityDiff = velocity.getTranslation().getNorm() - this.robot.getVelocity().getTranslation().getNorm();
-            if (Math.abs(velocityDiff) / lastUpdate >= this.bezierCurve.getConstants().maxAccel()) {
+            if (Math.abs(velocityDiff) / lastUpdate >= this.path.getConstants().maxAccel()) {
                 velocity = new Pose2d(
                         new Translation2d(
                             this.robot.getVelocity().getTranslation().getNorm() +
-                                    Math.copySign(this.bezierCurve.getConstants().maxAccel() * lastUpdate, velocityDiff),
+                                    Math.copySign(this.path.getConstants().maxAccel() * lastUpdate, velocityDiff),
                             velocity.getTranslation().getAngle()),
                         velocity.getRotation());
             }
@@ -70,7 +70,7 @@ public class Follower {
     }
 
     public double calculateVelocity() {
-        return this.pidController.calculate(this.bezierCurve.getDistance(this.state.t()), this.bezierCurve.getPathLength());
+        return this.pidController.calculate(this.path.getDistance(this.state.t()), this.path.getPathLength());
     }
 
     public double calculateOmega() {
@@ -87,9 +87,9 @@ public class Follower {
 
     private BezierCurve.State getClosestState() {
         List<BezierCurve.State> points = new ArrayList<>();
-        for (double t = 0; t <= 1; t = getNextT(t, this.bezierCurve.getDifferentBetweenTs())) {
+        for (double t = 0; t <= 1; t = getNextT(t, this.path.getDifferentBetweenTs())) {
             if (this.state.t() < 0 || Math.abs(this.state.t() - t) <= 0.3)
-                points.add(new BezierCurve.State(this.bezierCurve.getPosition(t), t));
+                points.add(new BezierCurve.State(this.path.getPosition(t), t));
         }
         points.sort(Comparator.comparing(s -> this.robot.getPosition().getTranslation().getDistance(s.pose().getTranslation())));
         return points.get(0);
@@ -112,7 +112,7 @@ public class Follower {
 
     public void reset() {
         this.state = new BezierCurve.State(new Pose2d(), 0);
-        this.robot.setPosition(new Pose2d(this.bezierCurve.getStartPoint(), Rotation2d.fromDegrees(0)));
+        this.robot.setPosition(new Pose2d(this.path.getStartPoint(), Rotation2d.fromDegrees(0)));
         this.robot.drive(new Pose2d());
         this.robot.setAngle(this.constants.startHeading);
         this.start();

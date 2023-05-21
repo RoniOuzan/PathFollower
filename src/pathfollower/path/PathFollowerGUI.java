@@ -27,7 +27,7 @@ public class PathFollowerGUI extends Frame implements ZeroCenter, DrawCentered {
     private static final double ROBOT_WIDTH = 0.91;
     private static final double BUMPER_WIDTH = 0.08;
 
-    private final BezierCurve bezierCurve;
+    private final Path path;
     private final Robot robot;
 
     private final Follower follower;
@@ -37,18 +37,18 @@ public class PathFollowerGUI extends Frame implements ZeroCenter, DrawCentered {
     public PathFollowerGUI() {
         super("Bezier Curve", DIMENSION, PIXELS_IN_ONE_UNIT);
 
-        this.bezierCurve = new BezierCurve(new BezierCurve.Constants(4.5, 4.5, 0.5),
+        this.path = new BezierCurve(new BezierCurve.Constants(4.5, 4.5, 0.5),
                 new Translation2d(2, -3),
                 new Translation2d(-5, 2),
-//                new Translation2d(-2, 1),
+                new Translation2d(-2, 1),
                 new Translation2d(-6, -2),
                 new Translation2d(3, 3),
                 new Translation2d(7, -1)
         );
-        this.robot = new Robot(new Pose2d(this.bezierCurve.getStartPoint(), Rotation2d.fromDegrees(0)),
+        this.robot = new Robot(new Pose2d(this.path.getStartPoint(), Rotation2d.fromDegrees(0)),
                 new Robot.Constants(5, 1 / FPS));
 
-        this.follower = new Follower(this.bezierCurve, this.robot,
+        this.follower = new Follower(this.path, this.robot,
                 new Follower.Constants(0, 270,
                         new PIDPreset(3, 0, 0, 1, 10),
                         new PIDPreset(2, 0, 0, 5, 10)));
@@ -59,24 +59,24 @@ public class PathFollowerGUI extends Frame implements ZeroCenter, DrawCentered {
 
     public void drawBackground() {
         if (IS_CHARGED_UP_FIELD)
-            this.drawImage(new ImageIcon("src/beziercurve/Field.png").getImage(), 0, 0, DIMENSION.getX(), DIMENSION.getY());
+            this.drawImage(new ImageIcon("src/pathfollower/path/Field.png").getImage(), 0, 0, DIMENSION.getX(), DIMENSION.getY());
         else
             this.drawGrid();
 
-        for (int i = 0; i < this.bezierCurve.getWaypoints().size() - 1; i++) {
-            Color color = new Color(0, (int) (255 * (i / (this.bezierCurve.getWaypoints().size() - 1d))), 0);
-            Translation2d[] bezierPoints = this.bezierCurve.getBezierPoint(this.follower.getState().t(), i);
-            this.drawConnectedPoints(color, bezierPoints);
-            for (Translation2d bezierPoint : bezierPoints) {
-                this.fillPoint(bezierPoint.getX(), bezierPoint.getY(), convertPixelsToUnits(4), color);
-            }
+//        for (int i = 0; i < this.path.getWaypoints().size() - 1; i++) {
+//            Color color = new Color(0, (int) (255 * (i / (this.path.getWaypoints().size() - 1d))), 0);
+//            Translation2d[] bezierPoints = this.path.getBezierPoint(this.follower.getState().t(), i);
+//            this.drawConnectedPoints(color, bezierPoints);
+//            for (Translation2d bezierPoint : bezierPoints) {
+//                this.fillPoint(bezierPoint.getX(), bezierPoint.getY(), convertPixelsToUnits(4), color);
+//            }
+//        }
+
+        for (double t = this.path.getDifferentBetweenTs(); t < 1; t += this.path.getDifferentBetweenTs()) {
+            this.drawRobotPose(this.path.getLocation(t));
         }
 
-        for (double t = this.bezierCurve.getDifferentBetweenTs(); t < 1; t += this.bezierCurve.getDifferentBetweenTs()) {
-            this.drawRobotPose(this.bezierCurve.getLocation(t));
-        }
-
-        for (Translation2d waypoint : this.bezierCurve.getWaypoints()) {
+        for (Translation2d waypoint : this.path.getWaypoints()) {
             this.drawWaypoint(waypoint);
         }
     }
@@ -84,25 +84,17 @@ public class PathFollowerGUI extends Frame implements ZeroCenter, DrawCentered {
     public void displayRobot() {
         BezierCurve.State state = this.follower.getState();
         Pose2d robot = this.robot.getPosition();
-//        Translation2d[] translation2ds = new Translation2d[5];
-//        for (int i = 0; i < translation2ds.length - 1; i++) {
-//            double radians = Math.toRadians(45 + (90 * i)) + robot.getRotation().getRadians();
-//            translation2ds[i] = robot.getTranslation().plus(new Translation2d(radius * Math.cos(radians), radius * Math.sin(radians)));
-//        }
-//        translation2ds[4] = robot.getTranslation().plus(
-//                new Translation2d(
-//                        1.5 * radius * Math.cos(robot.getRotation().getRadians()),
-//                        1.5 * radius * Math.sin(robot.getRotation().getRadians())));
+
         Translation2d setpoint = this.robot.getPosition().getTranslation()
                 .plus(new Translation2d(this.follower.getPidController().getSetpoint().position,
                         this.robot.getVelocity().getTranslation().getAngle()));
         this.fillPoint(setpoint.getX(), setpoint.getY(), convertPixelsToUnits(5), Color.GREEN);
 
-        double curvatureRadius = this.bezierCurve.getCurvatureRadius(state.t());
+        double curvatureRadius = this.path.getCurvatureRadius(state.t());
         Translation2d curvature = state.pose().getTranslation()
                 .plus(new Translation2d(
                         curvatureRadius,
-                        this.bezierCurve.getAngle(state.t()).plus(Rotation2d.fromDegrees(curvatureRadius > 0 ? -90 : 90))
+                        this.path.getAngle(state.t()).plus(Rotation2d.fromDegrees(curvatureRadius > 0 ? -90 : 90))
                 ));
         this.drawPoint(curvature.getX(), curvature.getY(), Math.abs(curvatureRadius), Color.BLUE);
 
@@ -134,8 +126,8 @@ public class PathFollowerGUI extends Frame implements ZeroCenter, DrawCentered {
                 "Velocity: " + MathUtil.limitDot(this.robot.getVelocity().getTranslation().getNorm(), 3) + "m/s",
                 "Accelration: " + MathUtil.limitDot(this.robot.getAcceleration(), 3) + "m/s",
                 "Omega Velocity: " + MathUtil.limitDot(this.robot.getVelocity().getRotation().getDegrees(), 3) + " deg/s",
-                "Distance: " + MathUtil.limitDot(this.bezierCurve.getDistance(0, this.follower.getState().t()), 3) + " / " + MathUtil.limitDot(this.bezierCurve.getPathLength(), 3),
-                "Curvature Radius: " + MathUtil.limitDot(this.bezierCurve.getCurvatureRadius(this.follower.getState().t()), 3)
+                "Distance: " + MathUtil.limitDot(this.path.getDistance(0, this.follower.getState().t()), 3) + " / " + MathUtil.limitDot(this.path.getPathLength(), 3),
+                "Curvature Radius: " + MathUtil.limitDot(this.path.getCurvatureRadius(this.follower.getState().t()), 3)
         };
 
         double size = convertPixelsToUnits(20);
@@ -149,9 +141,9 @@ public class PathFollowerGUI extends Frame implements ZeroCenter, DrawCentered {
     public void mouseDragged(MouseEvent e) {
         Translation2d mouseLocation = this.getMouseTranslation(e);
 
-        for (int i = this.bezierCurve.getWaypoints().size() - 1; i >= 0; i--) {
-            if (this.bezierCurve.getWaypoints().get(i).getDistance(mouseLocation) <= convertPixelsToUnits(50)) {
-                this.bezierCurve.setWaypoint(i, mouseLocation);
+        for (int i = this.path.getWaypoints().size() - 1; i >= 0; i--) {
+            if (this.path.getWaypoints().get(i).getDistance(mouseLocation) <= convertPixelsToUnits(50)) {
+                this.path.setWaypoint(i, mouseLocation);
                 break;
             }
         }
@@ -185,7 +177,7 @@ public class PathFollowerGUI extends Frame implements ZeroCenter, DrawCentered {
             this.writeValues();
             this.repaint();
 
-            t += this.bezierCurve.getDifferentBetweenTs() * direction;
+            t += this.path.getDifferentBetweenTs() * direction;
             if (t > 1) {
                 t = 1;
                 direction = -1;
